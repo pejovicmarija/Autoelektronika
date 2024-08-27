@@ -26,10 +26,10 @@ Pored ovoga imamo displej koji prikazuje rezim rada, trenutnu vrijednost osvjetl
 - Sada ste spremni za testiranje softvera
 
 ## **Upustvo za testiranje softvera**
---U COM0 umesto T1 uneti XYZ i oznaciti Auto 1, a zatim umesto R1 uneti simulirane podatke sa senzora koji pocinju sa \fe, a zavrsavaju sa \0d. Izmedju pisemo koja je ocitana vrednost osvjetljenosti. 
+---U COM0 umesto T1 uneti XYZ i oznaciti Auto 1, a zatim umesto R1 uneti simulirane podatke sa senzora koji pocinju sa \fe, a zavrsavaju sa \0d. Izmedju pisemo koja je ocitana vrednost osvjetljenosti. 
 - Kod COM1 se jedino razlikuje polje T1 gde treba da se unese ABC, ostalo je isto kao i kod COM0
 - Na COM2 softver automatski pretpostavi da se nalazimo u manuelnom rezimu, ako zelimo da se prebacimo u automatski rezim pisemo 
 
---Ako je trenutni rezim rada MANUELNO, na osnovu pritisnutog prekidaca ulaznog stubca svijetle nam odredjene diode koje simuliraju redom: dnevna, kratka i duga svjetla, lijevi i desni zmigavac
---Ako je trenutni rezim rada AUTOMATSKI, svjetla se kontrolisu prema senzoru osvjetljenja. Ako je trenutna vrijednost osvjetljenja (COM0) veca od 500 gase se kratka svjetla nakon 5s. Svjetla u kabini se gase ako se na COM1 posalje 1 (otvorena vrata), a pale se ako se na COM1 posalje 0 (zatvorena vrata)
---Na 7Seg Displjeju se prikazuje trenutna vrijednost koju saljemo preko CH0. Ako je pritisnut prvi ulazni taster na Led Baru, na 7Seg Displeju se ispisuje minimalna vrijednost, a ako je pritisnut drugi taster ispisuje se maksimalna vrijednost. 
+---Ako je trenutni rezim rada MANUELNO, na osnovu pritisnutog prekidaca ulaznog stubca svijetle nam odredjene diode koje simuliraju redom: dnevna, kratka i duga svjetla, lijevi i desni zmigavac
+---Ako je trenutni rezim rada AUTOMATSKI, svjetla se kontrolisu prema senzoru osvjetljenja. Ako je trenutna vrijednost osvjetljenja (COM0) veca od 500 gase se kratka svjetla nakon 5s. Svjetla u kabini se gase ako se na COM1 posalje 1 (otvorena vrata), a pale se ako se na COM1 posalje 0 (zatvorena vrata)
+---Na 7Seg Displjeju se prikazuje trenutna vrijednost koju saljemo preko CH0. Ako je pritisnut prvi ulazni taster na Led Baru, na 7Seg Displeju se ispisuje minimalna vrijednost, a ako je pritisnut drugi taster ispisuje se maksimalna vrijednost. 
