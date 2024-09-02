@@ -29,6 +29,7 @@ typedef unsigned int unsigned_t;
 
 static float_t average = (float_t)0; /*MISRA 4.9: Inicijalizacija na nulu*/
 static uint8_t automatski = (uint8_t)0; /*MISRA 4.9: Inicijalizacija na nulu*/
+
 static uint8_t vrata_status = (uint8_t)0; /*MISRA 4.9: Inicijalizacija na nulu*/
 static int8_t prag = (int8_t)0; /*MISRA 4.9: Inicijalizacija na nulu*/
 static float_t minValue = (float_t)FLT_MAX; /*Inicijalizacija na maksimalnu vrednost*/
@@ -37,14 +38,14 @@ typedef float float_t;
 typedef unsigned int unsigned_t;
 
 /*TASK PRIORITIES*/
-#define TASK_SERIAL_REC_PRI ((UBaseType_t)4) /* Za serijski prijem sa COM 0 */
-#define TASK_DATA_PROC_PRI ((UBaseType_t)3)   /* Za obrada podataka */
-#define TASK_SERIAL_SEND0_PRI (tskIDLE_PRIORITY + (UBaseType_t)2) /* Za serijski prenos sa COM 0 */
-#define TASK_SERIAL_RECV1_PRI (tskIDLE_PRIORITY + (UBaseType_t)2) /* Za serijski prijem sa COM 1 */
-#define TASK_SERIAL_RECV2_PRI (tskIDLE_PRIORITY + (UBaseType_t)2) /* Za serijski prijem sa COM 2 */
-#define TASK_SERIAL_SEND1_PRI (tskIDLE_PRIORITY + (UBaseType_t)2) /* Za serijski prenos sa COM 1 */
-#define TASK_LED_BAR_PRI (tskIDLE_PRIORITY + (UBaseType_t)1)      /* Za kontrolu LED bara (manualni) */
-#define TASK_LED_BAR_AUT_PRI (tskIDLE_PRIORITY + (UBaseType_t)2)  /* Za kontrolu LED bara (automatski) */
+#define TASK_SERIAL_REC_PRI ( tskIDLE_PRIORITY +(UBaseType_t)10) /* Za serijski prijem sa COM 0 */
+#define TASK_DATA_PROC_PRI (tskIDLE_PRIORITY +(UBaseType_t)9)   /* Za obrada podataka */
+#define TASK_SERIAL_SEND0_PRI (tskIDLE_PRIORITY + (UBaseType_t)8) /* Za serijski prenos sa COM 0 */
+#define TASK_SERIAL_RECV1_PRI (tskIDLE_PRIORITY + (UBaseType_t)7) /* Za serijski prijem sa COM 1 */
+#define TASK_SERIAL_RECV2_PRI (tskIDLE_PRIORITY + (UBaseType_t)6) /* Za serijski prijem sa COM 2 */
+#define TASK_SERIAL_SEND1_PRI (tskIDLE_PRIORITY + (UBaseType_t)5) /* Za serijski prenos sa COM 1 */
+#define TASK_LED_BAR_PRI (tskIDLE_PRIORITY + (UBaseType_t)4)      /* Za kontrolu LED bara (manualni) */
+#define TASK_LED_BAR_AUT_PRI (tskIDLE_PRIORITY + (UBaseType_t)3)  /* Za kontrolu LED bara (automatski) */
 #define TASK_SEND_TO_PC_PRI (tskIDLE_PRIORITY + (UBaseType_t)2)   /* Za slanje podataka PC-ju */
 #define TASK_ISPIS_7SEG_PRI (tskIDLE_PRIORITY + (UBaseType_t)1)   /* Za ispis na 7-segmentnom displeju*/
 
@@ -62,6 +63,8 @@ static void LEDBar_Task(void* pvParameters);
 static void LEDBar_Task1(void* pvParameters);
 static void SendToPC_Task(void* pvParameters);
 static void Ispis_7Seg(void* pvParameters);
+
+//static void SerialInputTask(void* pvParameters);
 
 /*7 - SEG NUMBER DATABASE - ALL HEX DIGITS[0 1 2 3 4 5 6 7 8 9 A B C D E F]*/
 static const uint8_t hexnum[] = { 0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F, 0x77, 0x7C, 0x39, 0x5E, 0x79, 0x71 };
@@ -83,11 +86,15 @@ static SemaphoreHandle_t TBE_BinarySemaphore2;
 static SemaphoreHandle_t SrednjaVrijednost;
 static SemaphoreHandle_t Blinkanje;
 static SemaphoreHandle_t Displej;
+static SemaphoreHandle_t ispis7seg;
 static QueueHandle_t Data_Queue;
 static QueueHandle_t Data_Queue1;
 static TimerHandle_t timer1;
 static TimerHandle_t timer500;
 static TimerHandle_t timer7;
+static TimerHandle_t timer8;
+static SemaphoreHandle_t ispis7seg1;
+
 
 
 
@@ -95,28 +102,28 @@ static TimerHandle_t timer7;
 static SemaphoreHandle_t LED_INT_BinarySemaphore;
 
 /*INTERRUPTS*/
-static void prvProcessTBEInterrupt(void) {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+static uint32_t prvProcessTBEInterrupt(void) {
+    BaseType_t xHigherPTW = pdFALSE;
 
     if (get_TBE_status(0) != 0) {
-        if (xSemaphoreGiveFromISR(TBE_BinarySemaphore, &xHigherPriorityTaskWoken) != pdPASS) {
+        if (xSemaphoreGiveFromISR(TBE_BinarySemaphore, &xHigherPTW) != pdPASS) {
             printf("Greska pri oslobadjanju semafora TBE_BinarySemaphore\n");
         }
     }
 
     if (get_TBE_status(1) != 0) {
-        if (xSemaphoreGiveFromISR(TBE_BinarySemaphore1, &xHigherPriorityTaskWoken) != pdPASS) {
+        if (xSemaphoreGiveFromISR(TBE_BinarySemaphore1, &xHigherPTW) != pdPASS) {
             printf("Greska pri oslobadjanju semafora TBE_BinarySemaphore1\n");
         }
     }
 
     if (get_TBE_status(2) != 0) {
-        if (xSemaphoreGiveFromISR(TBE_BinarySemaphore2, &xHigherPriorityTaskWoken) != pdPASS) {
+        if (xSemaphoreGiveFromISR(TBE_BinarySemaphore2, &xHigherPTW) != pdPASS) {
             printf("Greska pri oslobadjanju semafora TBE_BinarySemaphore2\n");
         }
     }
 
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR((uint32_t)xHigherPTW);
 }
 
 static uint32_t prviProcessRXCInterrupt(void) {
@@ -165,108 +172,149 @@ static void TimerCallback500(TimerHandle_t tmh) {
 }
 
 static void TimerCallback7(TimerHandle_t tmh) {
-    BaseType_t result = xSemaphoreGive(Displej);
-    // if (result != pdTRUE) {
-         // Ako funkcija xSemaphoreGive ne uspe, prijavite grešku
-      //   printf("Greska pri davanju semafora Displej\n");
-    // }
+    if ((xSemaphoreGive(Displej)) != pdTRUE) {
+        printf("greska semafor ispis7seg\n");
+    }
 }
 
-
-
+static void TimerCallback1(TimerHandle_t xTimer) {
+    if ((xSemaphoreGive(ispis7seg)) != pdTRUE) {
+        printf("greska semafor ispis7seg\n");
+    }
+}
 /*MAIN - SYSTEM STARTUP POINT*/
 void main_demo(void);
 void main_demo(void) {
     /*INITIALIZATION OF THE PERIPHERALS*/
-
     r_point1 = 0;
     r_point2 = 0;
     r_point3 = 0;
 
-    if (init_LED_comm() != 0) { printf("error LED"); }
-    if (init_7seg_comm() != 0) { printf("error 7seg"); }
+    if (init_LED_comm() != 0)
+    {
+        printf("error LED");
+    }
+    if (init_7seg_comm() != 0)
+    {
+        printf("error 7seg");
+    }
+    if (init_serial_uplink(COM_CH_0) != 0)
+    {
+        printf("ERROR KANAL 0");
+    }
+    /*Initialize serial TX on channel 0*/
+    if (init_serial_downlink(COM_CH_0) != 0)
+    {
+        printf("ERROR KANAL 0");
+    }
 
-    if (init_serial_uplink(COM_CH_0) != 0) { printf("ERROR KANAL 0"); } /*Initialize serial TX on channel 0*/
-    if (init_serial_downlink(COM_CH_0) != 0) { printf("ERROR KANAL 0"); }
+    if (init_serial_uplink(COM_CH_1) != 0)
+    {
+        printf("ERROR KANAL 1");
+    }
+    if (init_serial_downlink(COM_CH_1) != 0)
+    {
+        printf("ERROR KANAL 1");
+    }
 
-    if (init_serial_uplink(COM_CH_1) != 0) { printf("ERROR KANAL 1"); }
-    if (init_serial_downlink(COM_CH_1) != 0) { printf("ERROR KANAL 1"); }
+    if (init_serial_uplink(COM_CH_2) != 0)
+    {
+        printf("ERROR KANAL 2");
+    }
 
-
-    if (init_serial_uplink(COM_CH_2) != 0) { printf("ERROR KANAL 2"); }
-
-    if (init_serial_downlink(COM_CH_2) != 0) { printf("ERROR KANAL 2"); } /*Initialize serial RX on channel 0*/
+    if (init_serial_downlink(COM_CH_2) != 0)
+    {
+        printf("ERROR KANAL 2");
+    }
 
 
     /*INTERRUPT HANDLERS*/
-    vPortSetInterruptHandler(portINTERRUPT_SRL_RXC, prviProcessRXCInterrupt); // Serial reception interrupt handler
     vPortSetInterruptHandler(portINTERRUPT_SRL_TBE, prvProcessTBEInterrupt);
+    vPortSetInterruptHandler(portINTERRUPT_SRL_RXC, prviProcessRXCInterrupt); // Serial reception interrupt handler
     vPortSetInterruptHandler(portINTERRUPT_SRL_OIC, OnLED_ChangeInterrupt);
 
-
     /*BINARY SEMAPHORES*/
-
-        // Inicijalizacija semafora
     TBE_BinarySemaphore = xSemaphoreCreateBinary();
-    if (TBE_BinarySemaphore == NULL) {
+    if (TBE_BinarySemaphore == NULL)
+    {
         printf("Greska pri kreiranju TBE_BinarySemaphore\n");
     }
-
     TBE_BinarySemaphore1 = xSemaphoreCreateBinary();
-    if (TBE_BinarySemaphore1 == NULL) {
+    if (TBE_BinarySemaphore1 == NULL)
+    {
         printf("Greska pri kreiranju TBE_BinarySemaphore1\n");
     }
-
     TBE_BinarySemaphore2 = xSemaphoreCreateBinary();
-    if (TBE_BinarySemaphore2 == NULL) {
+    if (TBE_BinarySemaphore2 == NULL)
+    {
         printf("Greska pri kreiranju TBE_BinarySemaphore2\n");
     }
-
-
-
     RXC_BinarySemaphore = xSemaphoreCreateBinary();
-
-
+    if (RXC_BinarySemaphore == NULL)
+    {
+        printf("Greska pri kreiranju RXC_BinarySemaphore\n");
+    }
     RXC_BinarySemaphore1 = xSemaphoreCreateBinary();
-    if (RXC_BinarySemaphore1 == NULL) { printf("greska(RXC_BinarySemaphore1)"); }
-
-    if (TBE_BinarySemaphore1 == NULL) { printf("greska(TBE_BinarySemaphore1)"); }
+    if (RXC_BinarySemaphore1 == NULL)
+    {
+        printf("greska(RXC_BinarySemaphore1)");
+    }
     RXC_BinarySemaphore2 = xSemaphoreCreateBinary();
-    if (RXC_BinarySemaphore2 == NULL) { printf("greska(RXC_BinarySemaphore2)"); }
-
-    if (TBE_BinarySemaphore2 == NULL) { printf("greska(TBE_BinarySemaphore2)"); }
+    if (RXC_BinarySemaphore2 == NULL)
+    {
+        printf("greska(RXC_BinarySemaphore2)");
+    }
     Displej = xSemaphoreCreateBinary();
-    if (Displej == NULL) { printf("greska(Displej)"); }
+    if (Displej == NULL)
+    {
+        printf("greska(Displej)");
+    }
     Blinkanje = xSemaphoreCreateBinary();
-    if (Blinkanje == NULL) { printf("greska(Blinkanje)"); }
+    if (Blinkanje == NULL)
+    {
+        printf("greska(Blinkanje)");
+    }
     LED_INT_BinarySemaphore = xSemaphoreCreateBinary();
-    if (LED_INT_BinarySemaphore == NULL) { printf("greska(LED_INT_BinarySemaphore)"); }
-
+    if (LED_INT_BinarySemaphore == NULL)
+    {
+        printf("greska(LED_INT_BinarySemaphore)");
+    }
     SrednjaVrijednost = xSemaphoreCreateBinary();
-    if (SrednjaVrijednost == NULL) { printf("greska(SrednjaVrijednost)"); }
+    if (SrednjaVrijednost == NULL)
+    {
+        printf("greska(SrednjaVrijednost)");
+    }
 
+    ispis7seg = xSemaphoreCreateBinary();
+    if (ispis7seg == NULL)
+    {
+        printf("Error ispis7seg\n");
+    }
 
     /*QUEUES*/
     Data_Queue = xQueueCreate(10, sizeof(float_t));
-    if (Data_Queue == NULL) {
+    if (Data_Queue == NULL)
+    {
         printf("Greska prilikom kreiranja queue_senzor0\n");
     }
-
     Data_Queue1 = xQueueCreate(10, sizeof(float_t));
-    if (Data_Queue1 == NULL) {
+    if (Data_Queue1 == NULL)
+    {
         printf("Greska prilikom kreiranja queue_senzor0\n");
     }
 
     /*TIMERS*/
     timer1 = xTimerCreate(NULL, pdMS_TO_TICKS(200U), pdTRUE, NULL, TimerCallback);
-    if (timer1 == NULL) {
+    if (timer1 == NULL)
+    {
         printf("Tajmer1");
     }
 
     if (xTimerStart(timer1, portMAX_DELAY) != pdTRUE) { printf("ERROR TIMERSTAR1"); }
 
     timer500 = xTimerCreate(NULL, pdMS_TO_TICKS(500U), pdTRUE, NULL, TimerCallback500);
-    if (timer500 == NULL) {
+    if (timer500 == NULL)
+    {
         printf("Tajmer2");
     }
 
@@ -274,31 +322,60 @@ void main_demo(void) {
 
 
     timer7 = xTimerCreate(NULL, pdMS_TO_TICKS(1500U), pdTRUE, NULL, TimerCallback7);
-    if (timer7 == NULL) {
+    if (timer7 == NULL)
+    {
         printf("Tajmer3");
     }
-
     if (xTimerStart(timer7, portMAX_DELAY) != pdTRUE) { printf("ERROR TIMERSTAR7"); }
 
+    timer8 = xTimerCreate(NULL, pdMS_TO_TICKS(1500U), pdTRUE, NULL, TimerCallback1);
+    if (timer8 == NULL)
+    {
+        printf("Tajmer3");
+    }
+    if (xTimerStart(timer8, portMAX_DELAY) != pdTRUE) { printf("ERROR TIMERSTAR7"); }
 
     /*TASKS*/
-    if (xTaskCreate(SerialReceive_Task, "SRx", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_REC_PRI, NULL) != pdPASS) {
+    if (xTaskCreate(SerialReceive_Task, "SRx", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_REC_PRI, NULL) != pdPASS)
+    {
         printf("Task1");
     }
-    if (xTaskCreate(DataProcessing_Task, "DPx", configMINIMAL_STACK_SIZE, NULL, TASK_DATA_PROC_PRI, NULL) != pdPASS) {
+    if (xTaskCreate(DataProcessing_Task, "DPx", configMINIMAL_STACK_SIZE, NULL, TASK_DATA_PROC_PRI, NULL) != pdPASS)
+    {
         printf("Greska");
     }
-    if (xTaskCreate(SerialSend_Task0, "disp", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_SEND0_PRI, NULL) != pdPASS) { printf("GRESKA(SerialSend_Task0)"); }
-    if (xTaskCreate(SerialReceive_Task1, "SRx", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_RECV1_PRI, NULL) != pdPASS) { printf("GRESKA(SerialReceive_Task1)"); }
-    if (xTaskCreate(SerialSend_Task1, "disp", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_SEND1_PRI, NULL) != pdPASS) { printf("GRESKA(SerialSend_Task1)"); }
-    if (xTaskCreate(SerialReceive_Task2, "SRx", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_RECV2_PRI, NULL) != pdPASS) { printf("GRESKA(SerialReceive_Task2)"); }
-    if (xTaskCreate(LEDBar_Task, "ST", configMINIMAL_STACK_SIZE, NULL, TASK_LED_BAR_PRI, NULL) != pdPASS) { printf("GRESKA(LEDBar_Task)"); }
-    if (xTaskCreate(LEDBar_Task1, "ST", configMINIMAL_STACK_SIZE, NULL, TASK_LED_BAR_AUT_PRI, NULL) != pdPASS) { printf("GRESKA(LEDBar_Task1)"); }
-    if (xTaskCreate(SendToPC_Task, "ST", configMINIMAL_STACK_SIZE, NULL, TASK_SEND_TO_PC_PRI, NULL) != pdPASS) { printf("GRESKA(SendToPC_Task)"); }
-    if (xTaskCreate(Ispis_7Seg, "ST", configMINIMAL_STACK_SIZE, NULL, TASK_ISPIS_7SEG_PRI, NULL) != pdPASS) { printf("GRESKA(Ispis_7Seg)"); }
-
-
-
+    if (xTaskCreate(SerialSend_Task0, "disp", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_SEND0_PRI, NULL) != pdPASS)
+    {
+        printf("GRESKA(SerialSend_Task0)");
+    }
+    if (xTaskCreate(SerialReceive_Task1, "SRx", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_RECV1_PRI, NULL) != pdPASS)
+    {
+        printf("GRESKA(SerialReceive_Task1)");
+    }
+    if (xTaskCreate(SerialSend_Task1, "disp", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_SEND1_PRI, NULL) != pdPASS)
+    {
+        printf("GRESKA(SerialSend_Task1)");
+    }
+    if (xTaskCreate(SerialReceive_Task2, "SRx", configMINIMAL_STACK_SIZE, NULL, TASK_SERIAL_RECV2_PRI, NULL) != pdPASS)
+    {
+        printf("GRESKA(SerialReceive_Task2)");
+    }
+    if (xTaskCreate(LEDBar_Task, "ST", configMINIMAL_STACK_SIZE, NULL, TASK_LED_BAR_PRI, NULL) != pdPASS)
+    {
+        printf("GRESKA(LEDBar_Task)");
+    }
+    if (xTaskCreate(LEDBar_Task1, "ST", configMINIMAL_STACK_SIZE, NULL, TASK_LED_BAR_AUT_PRI, NULL) != pdPASS)
+    {
+        printf("GRESKA(LEDBar_Task1)");
+    }
+    if (xTaskCreate(SendToPC_Task, "ST", configMINIMAL_STACK_SIZE, NULL, TASK_SEND_TO_PC_PRI, NULL) != pdPASS)
+    {
+        printf("GRESKA(SendToPC_Task)");
+    }
+    if (xTaskCreate(Ispis_7Seg, "ST", configMINIMAL_STACK_SIZE, NULL, TASK_ISPIS_7SEG_PRI, NULL) != pdPASS)
+    {
+        printf("GRESKA(Ispis_7Seg)");
+    }
 
     /*START SCHEDULER*/
     vTaskStartScheduler();
@@ -306,18 +383,14 @@ void main_demo(void) {
     }
 }
 
-
-
-
 static void SerialSend_Task0(void* pvParameters) {
-    static unsigned volatile t_point0 = 0;  // Use 'unsigned' for compatibility
+    static unsigned volatile t_point0 = 0; 
     static const char trigger[] = "XYZ";
 
     for (;;) {
         if (t_point0 >= (sizeof(trigger) - 1u)) {
             t_point0 = 0u;
         }
-
         if (send_serial_character(COM_CH_0, (unsigned char)trigger[t_point0]) != 0) {
             printf("Greska\n");
         }
@@ -325,83 +398,91 @@ static void SerialSend_Task0(void* pvParameters) {
 
         if (xSemaphoreTake(TBE_BinarySemaphore, portMAX_DELAY) != pdPASS) {
             printf("Greska pri preuzimanju semafora TBE_BinarySemaphore\n");
-            // Možda želite da preduzmete dodatne korake, kao što je ponovni pokušaj
         }
     }
 }
 
-
 static void SerialReceive_Task(void* pvParameters) {
     uint8_t cc = 0;
     static uint8_t r_buffer1[R_BUF_SIZE] = { 0 };
-    char* endptr;  // Ensure endptr is declared before use
-
+    char* endptr;
     for (;;) {
-        // Wait for the semaphore to be available
         if (xSemaphoreTake(RXC_BinarySemaphore, portMAX_DELAY) != pdPASS) {
             printf("Greska pri prijemu semafora u SerialReceive_Task\n");
-            continue;  // Continue the loop to retry semaphore acquisition
+            continue;  
         }
-
-        // Retrieve the character from the serial channel
         if (get_serial_character(COM_CH_0, &cc) != 0) {
             printf("Greska pri prijemu karaktera na kanalu 0\n");
-            continue;  // Continue the loop to retry character reception
+            continue;  
         }
-
-        // Process received character
         if (cc == (uint8_t)0xfe) {
-            r_point1 = 0;  // Reset buffer index on receiving start marker
+            r_point1 = 0;  
         }
         else if (cc == (uint8_t)0x0d) {
-            r_buffer1[r_point1] = 0u;  // Null-terminate the buffer
-            //10.3, konvertovanje 0u
+            r_buffer1[r_point1] = 0u;  
+            // Provjeriti da li smo poslali rijec PRAG
+            if (r_point1 >= 6 && strncmp((const char*)r_buffer1, "PRAG", 4) == 0) {
+                //Procitati dvije sledece vrijednosti nakon rijeci PRAG
+                char prag_str[3] = { r_buffer1[4], r_buffer1[5], '\0' };
+                uint8_t received_prag = (uint8_t)strtol(prag_str, NULL, 10);
 
-            // Convert string to float
-            float_t broj = (float_t)strtof((const char*)r_buffer1, &endptr);
+                // Uporediti prag koji smo mi zadali i prag koji je izracunat unosenjem vrijednosti
+                if (received_prag == prag) {
+                    printf("Primljena vrijednost praga (%u) je jednaka postavljenom (%u)\n", prag, received_prag);
+                }
+                else if (prag > received_prag) {
+                    printf("Primljena vrijednost praga (%u) je veca od postavljenog (%u)\n", prag, received_prag);
+                    if (set_LED_BAR(1, 0x80) != 0) {
+                        printf("Greska");
+                    }
 
-            // Check if conversion was successful
-            if (endptr == (char*)r_buffer1) {
-                printf("Greska u konverziji stringa u float\n");
+                }
+                else {
+                    printf("Primljena vrijednost praga (%u) je manja od postavljenog (%u)\n", prag, received_prag);
+                    if (set_LED_BAR(1, 0x40) != 0) {
+                        printf("Greska");
+                    }
+                }
             }
-            else if (xQueueSend(Data_Queue, &broj, 0U) != pdPASS) {
-                printf("Greska pri slanju podatka u Data_Queue\n");
+            else {
+                float_t broj = (float_t)strtof((const char*)r_buffer1, &endptr);
+
+                if (endptr == (char*)r_buffer1) {
+                    printf("Primljeni string: %s\n", r_buffer1);
+                }
+                else {
+                    if (xQueueSend(Data_Queue, &broj, 0U) != pdPASS) {
+                        printf("Greska pri slanju podatka u Data_Queue\n");
+                    }
+                }
             }
 
-            r_point1 = 0;  // Reset buffer index after processing
+            r_point1 = 0; 
         }
         else if (r_point1 < (unsigned_t)(R_BUF_SIZE - 1U)) {
             r_buffer1[r_point1++] = cc;  // Store character and increment index
         }
         else {
-            // Handle buffer overflow
+            
             printf("Prekoracenje kapaciteta bafera\n");
-            r_point1 = 0;  // Reset index to avoid buffer overflow issues
+            r_point1 = 0;
         }
     }
 }
-
 static void DataProcessing_Task(void* pvParameters) {
     float_t broj;
     float_t broj1;
-
-
     float_t sensorReadings[NUM_SAMPLES] = { 0.0f };
     uint8_t currentIndex = 0U;
     float_t sum = 0.0f;
     uint8_t numReadings = 0U;
-
-
-
     for (;;) {
 
         if (xSemaphoreTake(SrednjaVrijednost, portMAX_DELAY) != pdPASS) { printf("Greska pri prijemu semafora u DataProcessing_Task"); }
 
         if (xQueueReceive(Data_Queue1, &broj1, 0U) == pdTRUE) {
             printf("Podatak primljen u Data_Queue1: %f\n", broj1);
-
         }
-
         if (xQueueReceive(Data_Queue, &broj, portMAX_DELAY) == pdTRUE) {
 
             if (broj < minValue) {
@@ -421,53 +502,30 @@ static void DataProcessing_Task(void* pvParameters) {
             else if (prag == 100) {
                 printf("Osvjetljenje je maksimalno!\n");
             }
-            else if (prag < 0) {
-                if (set_LED_BAR(1, 0x40) != 0) {
-                    printf("Greska");
-                }
-                printf("Kratka svjetla se automatski ukljucuju, a dnevna se iskljucuju!\n");
-            }
-            else if (prag > 100) {
-                if (set_LED_BAR(1, 0x80) != 0) {
-                    printf("Greska");
-                }
-                printf("Dnevna svjetla se ukljucuju!\n");
-            }
+
             else {
-                // Handle unexpected case or do nothing
-                // This is added to comply with MISRA Rule 15.7
-                printf("Prag vrednost nije u predvidjenom opsegu.\n");
+                // MISRA Rule 15.7
+                printf("Prag se nalazi u opsegu od 0 do 100.\n");
             }
-
-
-
             if (numReadings < (uint8_t)NUM_SAMPLES) {
                 numReadings++;
             }
             else {
                 sum -= sensorReadings[currentIndex];
             }
-
             sensorReadings[currentIndex] = broj;
             sum += broj;
             currentIndex = (currentIndex + 1U) % (uint8_t)NUM_SAMPLES;
-
             average = sum / (float_t)NUM_SAMPLES;
-
             printf("Prosecna vrednost poslednjih %d brojeva je : %f\n", NUM_SAMPLES, (float)average);
             printf("Minimalna vrednost: %f\n", (float)minValue);
             printf("Maksimalna vrednost: %f\n", (float)maxValue);
-        }
-
-        if (xSemaphoreGive(SrednjaVrijednost) != pdPASS) {
-            // Ako ne možete da oslobodite semafor, možda želite da logujete grešku ili obavite neku akciju
-            printf("Greska pri oslobadjanju semafora SrednjaVrijednost\n");
         }
     }
 }
 
 static void SerialSend_Task1(void* pvParameters) {
-    static unsigned volatile t_point1 = 0;  // Use 'unsigned' for compatibility
+    static unsigned volatile t_point1 = 0; 
     static const char trigger1[] = "XYZ";
 
     for (;;) {
@@ -481,11 +539,11 @@ static void SerialSend_Task1(void* pvParameters) {
         t_point1++;
 
         if (xSemaphoreTake(TBE_BinarySemaphore1, portMAX_DELAY) != pdPASS) {
-            // Ako se semafor ne može preuzeti, obavestite korisnika ili preduzmite druge akcije
             printf("Greska pri preuzimanju semafora TBE_BinarySemaphore1\n");
         }
     }
 }
+
 static void SerialReceive_Task1(void* pvParameters) {
     uint8_t cc = 0;
     static uint8_t r_buffer2[R_BUF_SIZE] = { 0 };
@@ -508,10 +566,8 @@ static void SerialReceive_Task1(void* pvParameters) {
         else if (cc == (uint8_t)0x0d) {
             r_buffer2[r_point2] = 0u;
 
-            // Convert string to float
             broj1 = (float_t)strtof((const char*)r_buffer2, NULL);
 
-            // Convert float to uint8_t
             vrata_status = (uint8_t)broj1;
 
             if (vrata_status == (uint8_t)0 || vrata_status == (uint8_t)1) {
@@ -557,16 +613,11 @@ static void SerialReceive_Task2(void* pvParameters) {
             printf("Greska pri prijemu karaktera na kanalu 2\n");
             continue;
         }
-
-
         printf("Received character: %c (0x%02X)\n", cc, cc);
-
         if (cc == (uint8_t)0x0d) {
             r_buffer3[r_point3] = 0u;
             //kastovanje 
             printf("Command received: %s\n", r_buffer3);
-
-
             if (strncmp((const char*)r_buffer3, "MANUELNO", 8) == 0) {
                 printf("Processing command: MANUELNO\n");
                 automatski = 0u;
@@ -610,8 +661,6 @@ static void SerialReceive_Task2(void* pvParameters) {
             else {
                 printf("Unknown command: %s\n", r_buffer3);
             }
-
-
             r_point3 = 0u;
         }
         else if (r_point3 < (unsigned_t)R_BUF_SIZE - 1u) {
@@ -662,10 +711,8 @@ static void LEDBar_Task(void* pvParameters) {
                 printf("DUGA SVJETLA\n");
             }
             if ((d & 0x08u) != 0u) {
-                //&& ((d & 0x10u) != 0u)) {
                 current_time = xTaskGetTickCount();
 
-                // Koristi vTaskDelayUntil za preciznije upravljanje intervalom blikanja
                 if ((current_time - last_blink_time) >= blink_interval) {
                     last_blink_time = current_time; // Ažuriraj vreme poslednjeg trepćećeg signala
                     blink_state ^= 1U; // Promeni stanje trepćećih LED
@@ -676,14 +723,12 @@ static void LEDBar_Task(void* pvParameters) {
                     else {
                         new_output &= ~0x10u; // Isključi trepćeće LED
                     }
-                    printf("ZMIGAVCI: novo stanje trepćećih LED = %02X\n", new_output);
+                    printf("ZMIGAVCI: novo stanje treptecih LED = %02X\n", new_output);
                 }
             }
             if ((d & 0x10u) != 0u) {
-                //&& ((d & 0x10u) != 0u)) {
                 current_time1 = xTaskGetTickCount();
 
-                // Koristi vTaskDelayUntil za preciznije upravljanje intervalom blikanja
                 if ((current_time1 - last_blink_time1) >= blink_interval) {
                     last_blink_time1 = current_time1; // Ažuriraj vreme poslednjeg trepćećeg signala
                     blink_state1 ^= 1U; // Promeni stanje trepćećih LED
@@ -694,10 +739,9 @@ static void LEDBar_Task(void* pvParameters) {
                     else {
                         new_output &= ~0x08u; // Isključi trepćeće LED
                     }
-                    printf("ZMIGAVCI: novo stanje trepćećih LED = %02X\n", new_output);
+                    printf("ZMIGAVCI: novo stanje treptecih LED = %02X\n", new_output);
                 }
             }
-
             if (new_output != previous_output) {
                 if (set_LED_BAR(1, new_output) != 0) {
                     printf("Greska sa led barom");
@@ -705,14 +749,12 @@ static void LEDBar_Task(void* pvParameters) {
                 previous_output = new_output;
             }
         }
-
         if (xSemaphoreGive(LED_INT_BinarySemaphore) != pdPASS) {
             printf("Greska pri davanju semafora");
         }
         vTaskDelay(pdMS_TO_TICKS(50u));
     }
-}
-static void LEDBar_Task1(void* pvParameters) {
+}static void LEDBar_Task1(void* pvParameters) {
     uint8_t previous_output = 0xFFu; // Početno stanje - sve LED diode uključene
     uint8_t output = 0xFFu;
     BaseType_t xStatus;
@@ -721,7 +763,6 @@ static void LEDBar_Task1(void* pvParameters) {
     if (set_LED_BAR(1, output) != 0) {
         printf("Greska 613: Neuspešno postavljanje LED bara\n");
     }
-
     for (;;) {
         // Primanje statusa vrata iz reda sa beskonačnim čekanjem
         xStatus = xQueueReceive(Data_Queue1, &vrata_status, 0);
@@ -738,7 +779,7 @@ static void LEDBar_Task1(void* pvParameters) {
                 continue; // Ako broj nije 0 ili 1, nastavi sa sledećim ciklusom
             }
 
-            // Provera i ažuriranje izlaza samo ako se promeni
+            // Provjera i ažuriranje izlaza samo ako se promeni
             if (output != previous_output) {
                 if (set_LED_BAR(1, output) != 0) {
                     printf("Greska 647: Neuspešno ažuriranje LED bara\n");
@@ -746,39 +787,38 @@ static void LEDBar_Task1(void* pvParameters) {
                 previous_output = output; // Ažuriranje prethodnog izlaza
             }
         }
-
-        // Proverite srednju vrednost i isključite LED na poziciji 0x40 ako je potrebno
+        // Proverite srednju vrijednost i isključite LED na poziciji 0x40 ako je potrebno
         if (average > 500.0f) {
             // Ako je LED na poziciji 0x40 uključena, isključite je
             if ((output & (uint8_t)0x40u) != 0) {
-                vTaskDelay(pdMS_TO_TICKS(5000u)); // Sačekajte 5 sekundi pre nego što isključite LED
+                vTaskDelay(pdMS_TO_TICKS(5000u)); // Sačekati 5 sekundi pre nego što isključite LED
                 output &= ~0x40u; // Isključite LED na poziciji 0x40
 
                 // Ažurirajte LED bar ako se promeni stanje
                 if (output != previous_output) {
                     if (set_LED_BAR(1, output) != 0) {
-                        printf("Greska 647: Neuspešno ažuriranje LED bara\n");
+                        printf("Greska 647: Neuspesno azuriranje LED bara\n");
                     }
                     previous_output = output; // Ažuriranje prethodnog izlaza
                 }
             }
         }
-
         vTaskDelay(pdMS_TO_TICKS(100u)); // Pauza između iteracija
     }
 }
+
 static void Ispis_7Seg(void* pvParameters) {
     uint8_t d;
     for (;;) {
         BaseType_t xStatus;
-
+        if (xSemaphoreTake(ispis7seg, portMAX_DELAY) != pdTRUE) {
+            printf("Greska kod prijema semafora ispis7seg\n");
+        }
         xStatus = xSemaphoreTake(Displej, portMAX_DELAY);
         if (xStatus != pdPASS) {
             // Obrada greške ako semafor nije uspešno preuzet
             printf("Greska pri preuzimanju semafora Displej\n");
-            // Moguće dodatne akcije, kao što je obaveštavanje ili ponovni pokušaj
         }
-
         int integer_part = (int)average;
         int thousands = (integer_part / 1000) % 10;
         int hundreds = (integer_part / 100) % 10;
@@ -809,8 +849,6 @@ static void Ispis_7Seg(void* pvParameters) {
         if (set_7seg_digit(hexnum[ones]) != 0) {
             printf("Greska");
         }
-
-
         if (automatski == 1u) {
             if (select_7seg_digit(4) != 0) {
                 printf("Greska.");
@@ -828,36 +866,22 @@ static void Ispis_7Seg(void* pvParameters) {
             }
 
         }
-
-
-
         int integer_part_max = (int)maxValue;
-
 
         int thousands_max = (integer_part_max / 1000) % 10;
         int hundreds_max = (integer_part_max / 100) % 10;
         int tens_max = (integer_part_max / 10) % 10;
         int ones_max = integer_part_max % 10;
 
-
-
-
         int integer_part_min = (int)minValue;
-
-
         int thousands_min = (integer_part_min / 1000) % 10;
         int hundreds_min = (integer_part_min / 100) % 10;
         int tens_min = (integer_part_min / 10) % 10;
         int ones_min = integer_part_min % 10;
-
-
-
         if (get_LED_BAR(0, &d) != 0) {
             printf("Greska 730");
         }
-
-
-        if ((d & 0x40u) != 0U) {
+        if ((d & 0x80u) != 0U) {
             if (select_7seg_digit(0) != 0) {
                 printf("Greska 735");
             }
@@ -883,7 +907,7 @@ static void Ispis_7Seg(void* pvParameters) {
                 printf("Greska 756");
             }
         }
-        if ((d & 0x80u) != 0U) {
+        if ((d & 0x40u) != 0U) {
             if (select_7seg_digit(0) != 0) {
                 printf("Greska 761");
             }
@@ -909,45 +933,44 @@ static void Ispis_7Seg(void* pvParameters) {
                 printf("Greska 504");
             }
         }
+        vTaskDelay(pdMS_TO_TICKS(100)); //  100ms kašnjenje
     }
 }
-
-
-
-
 static void SendToPC_Task(void* pvParameters) {
     char message[100];
     uint8_t d;
     for (;;) {
 
-        if (get_LED_BAR(1, &d) != 0) {
-            printf("Greska820");
+        if (get_LED_BAR(1, &d) != 0U) {
+            printf("Greska820\n");
         }
+        const char* daytime_running_lights = ((d & 0x80U) != 0U) ? "ON" : "OFF";
+        const char* low_beams = ((d & 0x40U) != 0U) ? "ON" : "OFF";
+        const char* high_beams = ((d & 0x20U) != 0U) ? "ON" : "OFF";
+        const char* left_turn_signal = ((d & 0x08U) != 0U) ? "ON" : "OFF";
+        const char* right_turn_signal = ((d & 0x10U) != 0U) ? "ON" : "OFF";
 
-        sprintf(message,
+        snprintf(message, sizeof(message),
             "Light Intensity: %f\n"
             "Daytime Running Lights: %s\n"
             "Low Beams: %s\n"
             "High Beams: %s\n"
             "Left Turn Signal: %s\n"
             "Right Turn Signal: %s\n",
-            average,
-            (d & 0x80U) ? "ON" : "OFF",
-            (d & 0x40U) ? "ON" : "OFF",
-            (d & 0x20U) ? "ON" : "OFF",
-            (d & 0x08U) ? "ON" : "OFF",
-            (d & 0x10U) ? "ON" : "OFF");
-
+            (double)average,
+            daytime_running_lights,
+            low_beams,
+            high_beams,
+            left_turn_signal,
+            right_turn_signal);
 
         for (char* p = message; *p != '\0'; p++) {
-            if (send_serial_character(COM_CH_2, (unsigned char)*p) != 0) {
-                //misra-kastovanje
-                printf("Greska.");
+            if (send_serial_character(COM_CH_2, (unsigned char)(*p)) != 0U) {
+                printf("Greska.\n");
             }
-            xSemaphoreTake(TBE_BinarySemaphore2, portMAX_DELAY); // Take semaphore
+            (void)xSemaphoreTake(TBE_BinarySemaphore2, portMAX_DELAY);
         }
-
-
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(2000U));
     }
 }
+
